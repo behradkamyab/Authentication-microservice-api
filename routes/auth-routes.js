@@ -11,7 +11,7 @@ router.get("/", isAuth, authController.test);
 router.post(
   "/signup",
   [
-    body("email").not().isEmpty().trim().isEmail(),
+    body("phoneNumber").not().isEmpty().trim().isNumeric(),
     body("name").not().isEmpty().trim(),
     body("password").not().isEmpty().trim(),
   ],
@@ -19,15 +19,15 @@ router.post(
 );
 
 router.post(
-  "/confirm-email/:userId",
+  "/confirm-phone-number/:userId",
   [body("token").trim().not().isEmpty()],
-  authController.confirmEmail
+  authController.confirmPhoneNumber
 );
 
 router.post(
   "/login",
   [
-    body("email").not().isEmpty().trim().isEmail(),
+    body("phoneNumber").not().isEmpty().trim().isNumeric(),
     body("password").not().isEmpty().trim(),
   ],
   authController.login
@@ -35,7 +35,7 @@ router.post(
 
 router.post(
   "/create-reset-password-token",
-  [body("email").trim().not().isEmpty()],
+  [body("phoneNumber").trim().not().isEmpty()],
   authController.createResetPassToken
 );
 

@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 
 const salt = 10;
+const phoneNumberRegex = /09(0[1-2]|1[0-9]|3[0-9]|2[0-1])-?[0-9]{3}-?[0-9]{4}/;
 const passRegex = /^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*\W)(?!.* ).{8,16}$/;
 const privateKey = "thishastobeinenvvariable";
 
@@ -15,7 +16,7 @@ exports.test = (req, res, next) => {
 };
 
 exports.signup = async (req, res, next) => {
-  const email = req.body.email;
+  const phoneNumber = req.body.phoneNumber;
   const password = req.body.password;
   const confirmPass = req.body.confirmPassword;
   const name = req.body.name;
@@ -27,6 +28,10 @@ exports.signup = async (req, res, next) => {
       err.data = errors.array();
       throw err;
     }
+    if (!phoneNumber.match(phoneNumberRegex)) {
+      const err = error.errorHandling("Enter the right phone number", 422);
+      throw err;
+    }
     if (!password.match(passRegex)) {
       const err = error.errorHandling(
         "Password must contain one digit from 1 to 9, one lowercase letter, one uppercase letter, one special character, no space, and it must be 8-16 characters long.",
@@ -34,9 +39,12 @@ exports.signup = async (req, res, next) => {
       );
       throw err;
     }
-    user = await User.findOne({ email: email });
+    user = await User.findOne({ phoneNumber: phoneNumber });
     if (user) {
-      const err = error.errorHandling("This email has already signed up!", 422);
+      const err = error.errorHandling(
+        "This phone number has already signed up!",
+        422
+      );
       throw err;
     }
     if (password !== confirmPass) {
@@ -45,7 +53,7 @@ exports.signup = async (req, res, next) => {
     }
     const hashedPass = await bcrypt.hash(password, salt);
     user = new User({
-      email: email,
+      phoneNumber: phoneNumber,
       name: name,
       password: hashedPass,
     });
@@ -74,7 +82,7 @@ exports.signup = async (req, res, next) => {
   }
 };
 
-exports.confirmEmail = async (req, res, next) => {
+exports.confirmPhoneNumber = async (req, res, next) => {
   const userId = req.params.userId;
   const token = req.body.token;
   const errors = validationResult(req);
@@ -86,7 +94,10 @@ exports.confirmEmail = async (req, res, next) => {
     }
     const user = await User.findOne({ _id: userId });
     if (!user) {
-      const err = error.errorHandling("there is no user with this email!", 422);
+      const err = error.errorHandling(
+        "there is no user with this phone number!",
+        422
+      );
       throw err;
     }
     const doMatch = await bcrypt.compare(
@@ -105,9 +116,10 @@ exports.confirmEmail = async (req, res, next) => {
     user.confirmation.confirmationTokenExpiration = undefined;
     const result = await user.save();
     if (result) {
-      res
-        .status(200)
-        .json({ success: true, message: "Your email has been confirmed!" });
+      res.status(200).json({
+        success: true,
+        message: "Your phone number has been confirmed!",
+      });
     }
   } catch (err) {
     if (!err.statusCode) {
@@ -118,7 +130,7 @@ exports.confirmEmail = async (req, res, next) => {
 };
 
 exports.login = async (req, res, next) => {
-  const email = req.body.email;
+  const phoneNumber = req.body.phoneNumber;
   const password = req.body.password;
   const errors = validationResult(req);
   try {
@@ -127,13 +139,22 @@ exports.login = async (req, res, next) => {
       err.data = errors.array();
       throw err;
     }
-    const user = await User.findOne({ email: email });
-    if (!user) {
-      const err = error.errorHandling("There is no user with this email", 404);
+    if (!phoneNumber.match(phoneNumberRegex)) {
+      const err = error.errorHandling("Enter the right phone number", 422);
       throw err;
     }
+
+    const user = await User.findOne({ phoneNumber: phoneNumber });
+    if (!user) {
+      const err = error.errorHandling(
+        "There is no user with this phone number",
+        404
+      );
+      throw err;
+    }
+
     if (!user.confirmation.isEnable) {
-      const err = error.errorHandling("Confirm your email first!", 422);
+      const err = error.errorHandling("Confirm your phone number first!", 422);
       throw err;
     }
     const doMatch = await bcrypt.compare(password, user.password);
@@ -165,7 +186,7 @@ exports.login = async (req, res, next) => {
     } else {
       const token = jwt.sign(
         {
-          email: user.email,
+          phoneNumber: user.phoneNumber,
           userId: user._id.toString(),
         },
         privateKey,
@@ -185,7 +206,7 @@ exports.login = async (req, res, next) => {
 };
 
 exports.createResetPassToken = async (req, res, next) => {
-  const email = req.body.email;
+  const phoneNumber = req.body.phoneNumber;
   const errors = validationResult(req);
   try {
     if (!errors.isEmpty()) {
@@ -193,9 +214,12 @@ exports.createResetPassToken = async (req, res, next) => {
       err.data = errors.array();
       throw err;
     }
-    const user = await User.findOne({ email: email });
+    const user = await User.findOne({ phoneNumber: phoneNumber });
     if (!user) {
-      const err = error.errorHandling("This email hasnt signedup yet!", 404);
+      const err = error.errorHandling(
+        "This phone number hasnt signedup yet!",
+        404
+      );
       throw err;
     }
     const buffer = crypto.randomBytes(32);
@@ -281,7 +305,10 @@ exports.enableOtp = async (req, res, next) => {
   try {
     const user = await User.findById(userId);
     if (!user) {
-      const err = error.errorHandling("This email hasnt signedup yet!", 404);
+      const err = error.errorHandling(
+        "This phone number hasnt signedup yet!",
+        404
+      );
       throw err;
     }
     user.otp.isEnable = true;
@@ -304,7 +331,10 @@ exports.disableOtp = async (req, res, next) => {
   try {
     const user = await User.findById(userId);
     if (!user) {
-      const err = error.errorHandling("This email hasnt signedup yet!", 404);
+      const err = error.errorHandling(
+        "This phone number hasnt signedup yet!",
+        404
+      );
       throw err;
     }
     user.otp.isEnable = false;
@@ -335,7 +365,10 @@ exports.verifyOtp = async (req, res, next) => {
     }
     const user = await User.findOne({ _id: userId });
     if (!user) {
-      const err = error.errorHandling("This email hasnt signedup yet!", 404);
+      const err = error.errorHandling(
+        "This phone number hasnt signedup yet!",
+        404
+      );
       throw err;
     }
     const doMatch = await bcrypt.compare(token, user.otp.otpSecret);
@@ -353,7 +386,7 @@ exports.verifyOtp = async (req, res, next) => {
     if (result) {
       const loginToken = jwt.sign(
         {
-          email: user.email,
+          phoneNumber: user.phoneNumber,
           userId: user._id.toString(),
         },
         privateKey,
