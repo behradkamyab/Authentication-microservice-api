@@ -1,8 +1,6 @@
 FROM node:latest
 
-
 WORKDIR /app
-
 
 COPY package.json .
 
@@ -10,7 +8,11 @@ RUN npm install
 
 COPY . .
 
-EXPOSE 8080
+ARG DEFAULT_PORT=8080
 
-CMD [ "npm", "start" ]
+ENV PORT ${DEFAULT_PORT}
+
+EXPOSE ${PORT}
+
+CMD [ "node", "app.js" ]
 

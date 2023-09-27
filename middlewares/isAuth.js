@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 
 const error = require("../error");
 
-const privateKey = "thishastobeinenvvariable";
+const privateKey = "";
 exports.isAuth = async (req, res, next) => {
   try {
     const authHeader = req.get("Authorization");

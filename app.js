@@ -30,7 +30,9 @@ app.use((error, req, res, next) => {
   res.status(status).json({ success: false, message: message, data: data });
 });
 
-const DbConnection = mongoose.connect("mongodb://127.0.0.1:27017");
+const DbConnection = mongoose.connect(
+  "mongodb://mongodb:27017/auth-microservice"
+);
 if (DbConnection) {
-  app.listen(8080);
+  app.listen(process.env.PORT);
 }
