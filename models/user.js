@@ -20,6 +20,7 @@ const userSchema = new Schema(
       disbale: false,
     },
     resetToken: { type: String },
+    resetTokenExpiration: { type: Date },
     confirmation: {
       isEnable: { type: Boolean, default: false },
       confirmationCode: { type: String },

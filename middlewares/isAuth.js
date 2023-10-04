@@ -1,19 +1,20 @@
 const jwt = require("jsonwebtoken");
+require("dotenv").config();
 
-const error = require("../error");
-
-const privateKey = "";
+const privateKey = process.env.PRIVATE_KEY;
 exports.isAuth = async (req, res, next) => {
   try {
     const authHeader = req.get("Authorization");
     if (!authHeader) {
-      const err = error.errorHandling("Authentication failed!", 401);
+      const err = new Error("Authentication failed!");
+      err.statusCode = 401;
       throw err;
     }
     const token = authHeader.split(" ")[1];
     const decodedtoken = jwt.verify(token, privateKey);
     if (!decodedtoken) {
-      const err = error.errorHandling("Authentication failed!", 401);
+      const err = new Error("Authentication failed!");
+      err.statusCode = 401;
       throw err;
     }
     req.userId = decodedtoken.userId;

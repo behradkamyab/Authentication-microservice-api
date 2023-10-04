@@ -1,70 +1,76 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const axios = require("axios");
+require("dotenv").config();
 
-const salt = 10;
-const phoneNumberRegex = /09(0[1-2]|1[0-9]|3[0-9]|2[0-1])-?[0-9]{3}-?[0-9]{4}/;
+const helper = require("../utilities/helper");
+
+// const phoneNumberRegex = /09[0-3][0-9]-?[0-9]{3}-?[0-9]{4}/;
 const passRegex = /^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*\W)(?!.* ).{8,16}$/;
-const privateKey = "thishastobeinenvvariable";
+const privateKey = process.env.PRIVATE_KEY;
 
 const User = require("../models/user");
-const error = require("../error");
-const { validationResult } = require("express-validator");
 
-exports.test = (req, res, next) => {
-  res.send("hello");
-};
+const { validationResult } = require("express-validator");
 
 exports.signup = async (req, res, next) => {
   const phoneNumber = req.body.phoneNumber;
   const password = req.body.password;
   const confirmPass = req.body.confirmPassword;
   const name = req.body.name;
+  let imageUrl;
   const errors = validationResult(req);
   let user;
   try {
     if (!errors.isEmpty()) {
-      const err = error.errorHandling("Validation failed!", 422);
+      const err = new Error("Validation failed!");
+      err.statusCode = 422;
       err.data = errors.array();
       throw err;
     }
-    if (!phoneNumber.match(phoneNumberRegex)) {
-      const err = error.errorHandling("Enter the right phone number", 422);
+    // if (!phoneNumber.match(phoneNumberRegex)) {
+    //   const err = new Error("Enter the right phone number");
+    //   err.statusCode = 422;
+    //   throw err;
+    // }
+    if (!password.match(passRegex)) {
+      const err = new Error(
+        "Password must contain one digit from 1 to 9, one lowercase letter, one uppercase letter, one special character, no space, and it must be 8-16 characters long."
+      );
+      err.statusCode = 422;
       throw err;
     }
-    if (!password.match(passRegex)) {
-      const err = error.errorHandling(
-        "Password must contain one digit from 1 to 9, one lowercase letter, one uppercase letter, one special character, no space, and it must be 8-16 characters long.",
-        422
-      );
-      throw err;
+    if (req.file) {
+      imageUrl = req.file.path.replace("\\", "/");
     }
     user = await User.findOne({ phoneNumber: phoneNumber });
     if (user) {
-      const err = error.errorHandling(
-        "This phone number has already signed up!",
-        422
-      );
+      const err = new Error("This phone number has already signed up!");
+      err.statusCode = 422;
       throw err;
     }
     if (password !== confirmPass) {
-      const err = error.errorHandling("Passwords do not match!", 422);
+      const err = new Error("Passwords do not match!");
+      err.statusCode = 422;
       throw err;
     }
-    const hashedPass = await bcrypt.hash(password, salt);
+    const hashedPass = await bcrypt.hash(password, 10);
     user = new User({
       phoneNumber: phoneNumber,
       name: name,
       password: hashedPass,
+      profilePic: imageUrl,
     });
-    const token = crypto.randomInt(0, 9999).toString();
-    const hashToken = await bcrypt.hash(token, salt);
-    if (!hashToken) {
-      const err = error.errorHandling("something went wrong", 500);
+
+    const token = crypto.randomInt(1000, 9999).toString();
+    const hashedToken = await bcrypt.hash(token, 10);
+    console.log(hashedToken);
+    if (!hashedToken) {
+      const err = new Error("something went wrong");
+      err.statusCode = 500;
       throw err;
     }
-    user.confirmation.confirmationCode = hashToken;
+    user.confirmation.confirmationCode = hashedToken;
     user.confirmation.confirmationTokenExpiration = Date.now() + 3600000;
     const result = await user.save();
     if (result) {
@@ -89,28 +95,31 @@ exports.confirmPhoneNumber = async (req, res, next) => {
   const errors = validationResult(req);
   try {
     if (!errors.isEmpty()) {
-      const err = error.errorHandling("Validation failed!", 422);
+      const err = new Error("Validation failed!");
+      err.statusCode = 422;
       err.data = errors.array();
       throw err;
     }
     const user = await User.findOne({ _id: userId });
     if (!user) {
-      const err = error.errorHandling(
-        "there is no user with this phone number!",
-        422
-      );
+      const err = new Error("there is no user with this phone number!");
+      err.statusCode = 404;
       throw err;
     }
+
     const doMatch = await bcrypt.compare(
       token,
       user.confirmation.confirmationCode
     );
+
     if (!doMatch) {
-      const err = error.errorHandling("Confirmation code is not valid", 422);
+      const err = new Error("Confirmation code is wrong");
+      err.statusCode = 422;
       throw err;
     }
     if (user.confirmation.confirmationTokenExpiration.getTime() <= Date.now()) {
-      const err = error.errorHandling("Confirmation code has expired", 422);
+      const err = new Error("Confirmation code has expired");
+      err.statusCode = 422;
       throw err;
     }
     user.confirmation.isEnable = true;
@@ -136,45 +145,47 @@ exports.login = async (req, res, next) => {
   const errors = validationResult(req);
   try {
     if (!errors.isEmpty()) {
-      const err = error.errorHandling("Validation failed!", 422);
+      const err = new Error("Validation failed!");
+      err.statusCode = 422;
       err.data = errors.array();
       throw err;
     }
-    if (!phoneNumber.match(phoneNumberRegex)) {
-      const err = error.errorHandling("Enter the right phone number", 422);
-      throw err;
-    }
+    // if (!phoneNumber.match(phoneNumberRegex)) {
+    //   const err = new Error("Enter the right phone number");
+    //   err.statusCode = 422;
+    //   throw err;
+    // }
 
     const user = await User.findOne({ phoneNumber: phoneNumber });
     if (!user) {
-      const err = error.errorHandling(
-        "There is no user with this phone number",
-        404
-      );
+      const err = new Error("There is no user with this phone number");
+      err.statusCode = 404;
       throw err;
     }
 
     if (!user.confirmation.isEnable) {
-      const err = error.errorHandling("Confirm your phone number first!", 422);
+      const err = new Error("Confirm your phone number first!");
+      err.statusCode = 422;
       throw err;
     }
     const doMatch = await bcrypt.compare(password, user.password);
     if (!doMatch) {
-      const err = error.errorHandling("Password do not match!", 422);
+      const err = new Error("Password do not match!");
+      err.statusCode = 422;
       throw err;
     }
     if (user.otp.isEnable === true) {
-      const token = crypto.randomInt(0, 99999).toString();
-      const hashToken = await bcrypt.hash(token, salt);
-      if (!hashToken) {
-        const err = error.errorHandling("something went wrong", 500);
+      const token = crypto.randomInt(1000, 9999).toString();
+      const hashedToken = await bcrypt.hash(token, 10);
+      if (!hashedToken) {
+        const err = new Error("something went wrong");
         throw err;
       }
-      user.otp.otpSecret = hashToken;
+      user.otp.otpSecret = hashedToken;
       user.otp.otpExpiration = Date.now() + 1000000;
       const result = await user.save();
       if (!result) {
-        const err = error.errorHandling("something went wrong", 500);
+        const err = new Error("something went wrong", 500);
         throw err;
       }
       //send token to user with sms
@@ -211,22 +222,24 @@ exports.createResetPassToken = async (req, res, next) => {
   const errors = validationResult(req);
   try {
     if (!errors.isEmpty()) {
-      const err = error.errorHandling("Validation failed!", 422);
+      const err = new Error("Validation failed!");
+      err.statusCode = 422;
       err.data = errors.array();
       throw err;
     }
     const user = await User.findOne({ phoneNumber: phoneNumber });
     if (!user) {
-      const err = error.errorHandling(
-        "This phone number hasnt signedup yet!",
-        404
-      );
+      const err = new Error("This phone number hasnt signedup yet!");
+      err.statusCode = 422;
       throw err;
     }
-    const buffer = crypto.randomBytes(32);
-    const token = buffer.toString("hex");
-    hashToken = await bcrypt.hash(token, salt);
-    user.resetToken = hashToken;
+    const token = crypto.randomInt(1000, 9999).toString();
+    const hashedToken = await bcrypt.hash(token, 10);
+    if (!hashedToken) {
+      const err = new Error("something went wrong");
+      throw err;
+    }
+    user.resetToken = hashedToken;
     user.resetTokenExpiration = Date.now() + 3600000;
     const result = await user.save();
     if (result) {
@@ -252,40 +265,44 @@ exports.updatePassword = async (req, res, next) => {
   const errors = validationResult(req);
   try {
     if (!errors.isEmpty()) {
-      const err = error.errorHandling("Validation failed!", 422);
+      const err = new Error("Validation failed!");
+      err.statusCode = 422;
       err.data = errors.array();
       throw err;
     }
     const user = await User.findOne({ _id: userId });
     if (!user) {
-      const err = error.errorHandling("Cannot find the user!", 404);
+      const err = new Error("Cannot find the user!");
+      err.statusCode = 404;
       throw err;
     }
+
     const tokenMatch = await bcrypt.compare(token, user.resetToken);
+
     if (!tokenMatch) {
-      const err = error.errorHandling("Your reset token has been expired!");
+      const err = new Error("Reset token is wrong");
+      err.statusCode = 422;
       throw err;
     }
     if (user.resetTokenExpiration <= Date.now()) {
-      const err = error.errorHandling("Your time has been expired!", 422);
+      const err = new Error("Your time has been expired!");
+      err.statusCode = 422;
       throw err;
     }
     const doMatch = await bcrypt.compare(password, user.password);
     if (doMatch) {
-      const err = error.errorHandling(
-        "new password cannot be like the old one",
-        422
-      );
+      const err = new Error("new password cannot be like the old one");
+      err.statusCode = 422;
       throw err;
     }
     if (!password.match(passRegex)) {
-      const err = error.errorHandling(
-        "Password must contain one digit from 1 to 9, one lowercase letter, one uppercase letter, one special character, no space, and it must be 8-16 characters long.",
-        422
+      const err = new Error(
+        "Password must contain one digit from 1 to 9, one lowercase letter, one uppercase letter, one special character, no space, and it must be 8-16 characters long."
       );
+      err.statusCode = 422;
       throw err;
     }
-    const newPass = await bcrypt.hash(password, salt);
+    const newPass = await bcrypt.hash(password, 10);
     user.password = newPass;
     user.resetToken = undefined;
     user.resetTokenExpiration = undefined;
@@ -306,10 +323,8 @@ exports.enableOtp = async (req, res, next) => {
   try {
     const user = await User.findById(userId);
     if (!user) {
-      const err = error.errorHandling(
-        "This phone number hasnt signedup yet!",
-        404
-      );
+      const err = new Error("This phone number hasnt signedup yet!");
+      err.statusCode = 404;
       throw err;
     }
     user.otp.isEnable = true;
@@ -332,10 +347,8 @@ exports.disableOtp = async (req, res, next) => {
   try {
     const user = await User.findById(userId);
     if (!user) {
-      const err = error.errorHandling(
-        "This phone number hasnt signedup yet!",
-        404
-      );
+      const err = new Error("This phone number hasnt signedup yet!");
+      err.statusCode = 404;
       throw err;
     }
     user.otp.isEnable = false;
@@ -360,25 +373,30 @@ exports.verifyOtp = async (req, res, next) => {
   const errors = validationResult(req);
   try {
     if (!errors.isEmpty()) {
-      const err = error.errorHandling("Validation failed!", 422);
+      const err = new Error("Validation failed!");
+      err.statusCode = 422;
       err.data = errors.array();
       throw err;
     }
     const user = await User.findOne({ _id: userId });
     if (!user) {
-      const err = error.errorHandling(
-        "This phone number hasnt signedup yet!",
-        404
-      );
+      const err = new Error("This phone number hasnt signedup yet!");
+      err.statusCode = 404;
       throw err;
     }
-    const doMatch = await bcrypt.compare(token, user.otp.otpSecret);
+    const doMatch = await bcrypt.compare(
+      token,
+      user.confirmation.confirmationCode
+    );
+
     if (!doMatch) {
-      const err = error.errorHandling("Otp code is wrong", 422);
+      const err = new Error("OTP code is wrong");
+      err.statusCode = 422;
       throw err;
     }
     if (user.otp.otpExpiration.getTime() <= Date.now()) {
-      const err = error.errorHandling("Otp code has expired", 422);
+      const err = new Error("Otp code has expired");
+      err.statusCode = 422;
       throw err;
     }
     user.otp.otpSecret = undefined;
